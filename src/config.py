@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 SERVERCHAN_KEY = os.getenv("SERVERCHAN_KEY", "")
 
@@ -9,8 +9,13 @@ class OTCFund:
     name: str
     code: str
     daily_limit: str = "待查"
+    limit_amount: Optional[float] = None
     management_fee: str = "待查"
     custodian_fee: str = "待查"
+    total_fee_pct: float = 0.0
+    return_1y: str = "待查"
+    return_3y: str = "待查"
+    fund_size: str = "待查"
     date: str = ""
 
 @dataclass
@@ -23,17 +28,13 @@ class ETFFund:
     volume: str = "待查"
 
 OTC_FUNDS: List[OTCFund] = [
-    OTCFund(name="广发纳斯达克100指数A", code="270042", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="广发纳斯达克100指数C", code="006479", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="国泰纳斯达克100指数", code="160213", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="大成纳斯达克100指数A", code="000834", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="大成纳斯达克100指数C", code="008971", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="华安纳斯达克100指数A", code="040046", management_fee="1.00%", custodian_fee="0.20%"),
-    OTCFund(name="华安纳斯达克100指数C", code="014978", management_fee="1.00%", custodian_fee="0.20%"),
-    OTCFund(name="易方达纳斯达克100A", code="161130", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="易方达纳斯达克100C", code="012870", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="天弘纳斯达克100A", code="018043", management_fee="0.80%", custodian_fee="0.20%"),
-    OTCFund(name="天弘纳斯达克100C", code="018044", management_fee="0.80%", custodian_fee="0.20%"),
+    OTCFund(name="广发纳斯达克100指数A", code="270042", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="国泰纳斯达克100指数", code="160213", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="大成纳斯达克100指数A", code="000834", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="华安纳斯达克100指数A", code="040046", management_fee="1.00%", custodian_fee="0.20%", total_fee_pct=1.20),
+    OTCFund(name="易方达纳斯达克100A", code="161130", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="天弘纳斯达克100A", code="018043", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="南方纳斯达克100I", code="015062", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
 ]
 
 ETF_FUNDS: List[ETFFund] = [
