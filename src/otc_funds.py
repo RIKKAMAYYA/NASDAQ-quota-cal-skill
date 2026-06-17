@@ -31,6 +31,7 @@ def fetch_fund_limit_page(code: str) -> str:
             r"申购限额[：:]\s*([^<]+)",
             r"限购[：:]\s*([^<]+)",
             r"单日累计购买上限[：:]\s*([^<]+)",
+            r"本基金每[^，]*?限额[：:]\s*([^<，。]+)",
         ]
         for pattern in limit_patterns:
             match = re.search(pattern, text)
@@ -44,29 +45,10 @@ def fetch_fund_limit_page(code: str) -> str:
     except Exception:
         return "查询失败"
 
-def fetch_fee_info(code: str) -> dict:
-    url = f"http://fund.eastmoney.com/pingzhongdata/{code}.js"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        resp.encoding = "utf-8"
-        text = resp.text
-        mgmt_fee = re.search(r"管理费率[：:]\s*([\d.]+%)", text)
-        cust_fee = re.search(r"托管费率[：:]\s*([\d.]+%)", text)
-        return {
-            "management_fee": mgmt_fee.group(1) if mgmt_fee else "待查",
-            "custodian_fee": cust_fee.group(1) if cust_fee else "待查",
-        }
-    except Exception:
-        return {"management_fee": "待查", "custodian_fee": "待查"}
-
 def collect_otc_data() -> List[OTCFund]:
     results = []
     for fund in OTC_FUNDS:
         print(f"  正在查询: {fund.name} ({fund.code})")
-        limit = fetch_fund_limit_page(fund.code)
-        fee = fetch_fee_info(fund.code)
-        fund.daily_limit = limit
-        fund.management_fee = fee["management_fee"]
-        fund.custodian_fee = fee["custodian_fee"]
+        fund.daily_limit = fetch_fund_limit_page(fund.code)
         results.append(fund)
     return results
