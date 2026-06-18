@@ -59,7 +59,6 @@ def is_purchasable(fund: OTCFund) -> bool:
     return True
 
 def rank_key(fund: OTCFund):
-    fee = fund.total_fee_pct
     try:
         ret3y = float(fund.return_3y.replace('%', ''))
     except (ValueError, AttributeError):
@@ -81,7 +80,7 @@ def rank_key(fund: OTCFund):
         base_return = 0
 
     performance = base_return - te * 5
-    return (fee, -performance)
+    return (-performance, fund.total_fee_pct)
 
 def get_buy_plan(otc_data: List[OTCFund]) -> str:
     scored = [(compute_score(f), f) for f in otc_data]
@@ -100,7 +99,7 @@ def get_buy_plan(otc_data: List[OTCFund]) -> str:
     lines.append("")
     lines.append("### 💡 每日购买方案（总额度210元）")
     lines.append("")
-    lines.append("> 📌 优先级：低总费率 → 综合表现分(收益-跟踪误差×5) → 买满额度")
+    lines.append("> 📌 优先级：综合表现分(收益-跟踪误差×5) → 总费率 → 买满额度")
     lines.append("> 📌 你有京东Plus会员，A类申购费已免除")
     lines.append("")
 
@@ -137,10 +136,10 @@ def get_buy_plan(otc_data: List[OTCFund]) -> str:
 
     lines.append("")
     lines.append("**方案逻辑：**")
-    lines.append("1. 第一排序：总费率越低越优先（长期持有成本最关键）")
-    lines.append("2. 第二排序：综合表现分 = 收益 - 跟踪误差×5")
+    lines.append("1. 第一排序：综合表现分 = 收益 - 跟踪误差×5（实际表现优先）")
     lines.append("   - 优先用近3年收益，无数据则用近1年")
     lines.append("   - 跟踪误差大但收益高 → 综合分不低，仍可排入")
+    lines.append("2. 第二排序：总费率越低越优先（同表现下选低成本）")
     lines.append("3. 从第一名开始，**买满其每日限额**")
     lines.append("4. 剩余额度继续买下一只，直到210元分配完")
     lines.append("5. 暂停申购的基金不参与分配")
