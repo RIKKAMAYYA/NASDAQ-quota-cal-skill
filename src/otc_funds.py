@@ -8,125 +8,152 @@ HEADERS = {
                   "Chrome/120.0.0.0 Safari/537.36"
 }
 
-def fetch_limit_from_fundf10(code: str) -> Tuple[str, Optional[float]]:
-    url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
+def fetch_fund_info(code: str) -> dict:
+    info = {
+        "status": "待查",
+        "limit_text": "待查",
+        "limit_amount": None,
+        "management_fee": "待查",
+        "custodian_fee": "待查",
+        "sales_service_fee": "0.00%",
+        "purchase_fee_original": "待查",
+        "purchase_fee_current": "待查",
+        "return_1y": "待查",
+        "return_3y": "待查",
+        "fund_size": "待查",
+    }
+
+    url = f'https://fundf10.eastmoney.com/jjfl_{code}.html'
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
         resp.encoding = 'utf-8'
         text = resp.text
 
-        upper_match = re.search(r'单日累计购买上限\s*([\d,.]+)\s*(万?元)?', text)
-        status_match = re.search(r'交易状态[：:]\s*([^<]{2,30})', text)
-        limit_match = re.search(r'日累计申购限额(?:</td><td[^>]*>)?\s*(无限额|[\d,.]+)\s*(万?元)?', text)
+        clean = re.sub(r'<[^>]+>', ' | ', text)
+        clean = re.sub(r'\s+', ' ', clean)
 
-        upper_amount = None
-        upper_display = ""
-        if upper_match:
-            upper_display = upper_match.group(1)
-            unit = upper_match.group(2) or "元"
-            upper_amount = parse_amount(upper_match.group(1))
-            if '万' in unit and upper_amount:
-                upper_amount *= 10000
+        mgmt = re.search(r'管理费率\s*\|\s*\|?\s*([\d.]+)%', clean)
+        cust = re.search(r'托管费率\s*\|\s*\|?\s*([\d.]+)%', clean)
+        ssf = re.search(r'销售服务费率\s*\|\s*\|?\s*([\d.]+|---)%', clean)
+        if mgmt:
+            info["management_fee"] = f"{mgmt.group(1)}%"
+        if cust:
+            info["custodian_fee"] = f"{cust.group(1)}%"
+        if ssf:
+            info["sales_service_fee"] = f"{ssf.group(1)}%" if ssf.group(1) != "---" else "0.00%"
 
-        limit_amount = None
-        limit_display = ""
-        if limit_match:
-            limit_display = limit_match.group(1)
-            unit2 = limit_match.group(2) or "元"
-            limit_amount = parse_amount(limit_match.group(1))
-            if '万' in unit2 and limit_amount:
-                limit_amount *= 10000
+        if '暂停申购' in clean:
+            info["status"] = "暂停申购"
+        elif '限大额' in clean:
+            info["status"] = "限大额"
+        else:
+            info["status"] = "正常申购"
 
-        if '无限额' in text and '日累计申购限额无限额' in text:
-            return "无限额", float("inf")
+        upper_m = re.search(r'单日累计购买上限\s*([\d,.]+)\s*(万?元)?', clean)
+        if upper_m:
+            upper_val = upper_m.group(1)
+            upper_unit = upper_m.group(2) or "元"
+            info["limit_text"] = f"上限{upper_val}{upper_unit}"
+            try:
+                amount = float(upper_val.replace(',', ''))
+                if '万' in upper_unit:
+                    amount *= 10000
+                info["limit_amount"] = amount
+            except ValueError:
+                pass
 
-        status = status_match.group(1).strip() if status_match else ""
-
-        if '暂停申购' in status:
-            if upper_amount is not None:
-                return f"暂停申购(上限{upper_display}元)", upper_amount
-            return "暂停申购", 0.0
-
-        if '限大额' in status:
-            if upper_amount is not None:
-                return f"限大额(上限{upper_display}元)", upper_amount
-            if limit_amount is not None:
-                return f"限大额(上限{limit_display}元)", limit_amount
-            return "限大额", 0.0
-
-        if limit_amount is not None:
-            return f"限额{limit_display}元", limit_amount
-
-        if '暂停申购' in text:
-            return "暂停申购", 0.0
-        if '限大额' in text:
-            return "限大额", 0.0
+        limit_m = re.search(r'日累计申购限额\s*\|\s*\|?\s*(无限额|[\d,.]+)\s*(万?元)?', clean)
+        if limit_m:
+            if limit_m.group(1) == '无限额':
+                info["limit_text"] = "无限额"
+                info["limit_amount"] = float("inf")
+            else:
+                limit_val = limit_m.group(1)
+                limit_unit = limit_m.group(2) or "元"
+                if not upper_m:
+                    info["limit_text"] = f"限额{limit_val}{limit_unit}"
+                    try:
+                        amount = float(limit_val.replace(',', ''))
+                        if '万' in limit_unit:
+                            amount *= 10000
+                        info["limit_amount"] = amount
+                    except ValueError:
+                        pass
     except Exception as e:
-        print(f"    [DEBUG] 费率页失败: {e}")
-    return "待查", None
+        print(f"    [ERROR] fundf10 {code}: {e}")
 
-def parse_amount(text: str) -> Optional[float]:
-    text = text.strip()
-    if '无限额' in text:
-        return float("inf")
-    match = re.search(r'([\d,.]+)\s*(万?亿?元?)?', text)
-    if match:
-        num_str = match.group(1).replace(',', '')
-        unit = (match.group(2) or '元').strip()
-        try:
-            num = float(num_str)
-            if '亿' in unit:
-                return num * 100000000
-            if '万' in unit:
-                return num * 10000
-            return num
-        except ValueError:
-            pass
-    return None
-
-def fetch_fund_performance(code: str) -> Tuple[str, str, str]:
-    url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+    url2 = f'https://fund.eastmoney.com/pingzhongdata/{code}.js'
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        text = resp.text
+        resp2 = requests.get(url2, headers=HEADERS, timeout=8)
+        text2 = resp2.text
 
-        syl_1y = re.search(r'syl_1y\s*=\s*"?([^";\n]+)', text)
-        syl_3y = re.search(r'syl_3y\s*=\s*"?([^";\n]+)', text)
-        syl_1n = re.search(r'syl_1n\s*=\s*"?([^";\n]+)', text)
+        source_rate = re.search(r'fund_sourceRate="([^"]+)"', text2)
+        now_rate = re.search(r'fund_Rate="([^"]+)"', text2)
+        if source_rate and source_rate.group(1):
+            info["purchase_fee_original"] = f"{source_rate.group(1)}%"
+        if now_rate and now_rate.group(1):
+            info["purchase_fee_current"] = f"{now_rate.group(1)}%"
 
-        y1 = f"{float(syl_1y.group(1)):.2f}%" if syl_1y else "待查"
-        y3 = f"{float(syl_3y.group(1)):.2f}%" if syl_3y else "待查"
+        syl_1y = re.search(r'syl_1y\s*=\s*"?([^";\n]+)', text2)
+        syl_3y = re.search(r'syl_3y\s*=\s*"?([^";\n]+)', text2)
+        if syl_1y and syl_1y.group(1):
+            try:
+                info["return_1y"] = f"{float(syl_1y.group(1)):.2f}%"
+            except ValueError:
+                pass
+        if syl_3y and syl_3y.group(1):
+            try:
+                info["return_3y"] = f"{float(syl_3y.group(1)):.2f}%"
+            except ValueError:
+                pass
 
-        size = "待查"
-        size_match = re.search(r'Data_fluctuationScale\s*=\s*\{[^}]*"series":\[\{"name":"[^"]*","data":\[([^\]]+)\]', text)
+        size_match = re.search(r'Data_fluctuationScale\s*=\s*\{[^}]*"series":\[\{"name":"[^"]*","data":\[([^\]]+)\]', text2)
         if size_match:
             nums = size_match.group(1).split(',')
             if nums:
                 last = float(nums[-1].strip())
                 if last >= 1:
-                    size = f"{last:.2f}亿"
+                    info["fund_size"] = f"{last:.2f}亿"
                 else:
-                    size = f"{last*10000:.0f}万"
+                    info["fund_size"] = f"{last*10000:.0f}万"
+    except Exception as e:
+        print(f"    [ERROR] pingzhongdata {code}: {e}")
 
-        return y1, y3, size
-    except Exception:
-        return "待查", "待查", "待查"
+    return info
 
 def collect_otc_data() -> List[OTCFund]:
     results = []
     for fund in OTC_FUNDS:
         print(f"  正在查询: {fund.name} ({fund.code})")
+        info = fetch_fund_info(fund.code)
 
-        limit_text, limit_amount = fetch_limit_from_fundf10(fund.code)
-        fund.daily_limit = limit_text
-        fund.limit_amount = limit_amount
-        print(f"    → 限额: {limit_text} (数值: {limit_amount})")
+        fund.management_fee = info["management_fee"]
+        fund.custodian_fee = info["custodian_fee"]
+        fund.sales_service_fee = info["sales_service_fee"]
+        fund.purchase_fee = info["purchase_fee_current"]
 
-        y1, y3, size = fetch_fund_performance(fund.code)
-        fund.return_1y = y1
-        fund.return_3y = y3
-        fund.fund_size = size
-        print(f"    → 近1年: {y1}, 近3年: {y3}, 规模: {size}")
+        mgmt_val = float(info["management_fee"].replace('%', '')) if info["management_fee"] != "待查" else 0
+        cust_val = float(info["custodian_fee"].replace('%', '')) if info["custodian_fee"] != "待查" else 0
+        ssf_val = float(info["sales_service_fee"].replace('%', '')) if info["sales_service_fee"] not in ("待查", "0.00%", "---") else 0
+        fund.total_fee_pct = mgmt_val + cust_val + ssf_val
+
+        if info["status"] == "暂停申购":
+            fund.daily_limit = f"暂停申购({info['limit_text']})" if info['limit_text'] != '待查' else "暂停申购"
+            fund.limit_amount = info.get("limit_amount", 0.0)
+        elif info["status"] == "限大额":
+            fund.daily_limit = f"限大额({info['limit_text']})" if info['limit_text'] != '待查' else "限大额"
+            fund.limit_amount = info.get("limit_amount")
+        else:
+            fund.daily_limit = info['limit_text'] if info['limit_text'] != '待查' else "无限额"
+            fund.limit_amount = info.get("limit_amount", float("inf"))
+
+        fund.return_1y = info["return_1y"]
+        fund.return_3y = info["return_3y"]
+        fund.fund_size = info["fund_size"]
+
+        print(f"    → 状态: {info['status']} | 限额: {fund.daily_limit}")
+        print(f"    → 管理费: {fund.management_fee} | 托管费: {fund.custodian_fee} | 销售服务费: {fund.sales_service_fee} | 总费率: {fund.total_fee_pct:.2f}%")
+        print(f"    → 申购费: {info['purchase_fee_original']}→{info['purchase_fee_current']} | 近1年: {fund.return_1y} | 近3年: {fund.return_3y}")
 
         time.sleep(0.3)
         results.append(fund)

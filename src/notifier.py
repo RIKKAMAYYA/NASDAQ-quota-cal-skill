@@ -13,39 +13,46 @@ def pad_cjk(text: str, width: int) -> str:
 def fmt_otc_table(data: List[OTCFund]) -> str:
     lines = []
     lines.append("```")
-    h1 = pad_cjk("基金名称", 22)
+    h1 = pad_cjk("基金名称", 20)
     h2 = pad_cjk("代码", 8)
-    h3 = pad_cjk("每日限额", 14)
-    h4 = pad_cjk("管理+托管", 12)
-    h5 = pad_cjk("近1年", 10)
-    h6 = pad_cjk("规模", 12)
-    lines.append(f"{h1} {h2} {h3} {h4} {h5} {h6}")
-    lines.append("-" * 78)
+    h3 = pad_cjk("状态/限额", 18)
+    h4 = pad_cjk("管理费", 7)
+    h5 = pad_cjk("托管费", 7)
+    h6 = pad_cjk("服务费", 7)
+    h7 = pad_cjk("总费率", 7)
+    h8 = pad_cjk("申购费", 7)
+    h9 = pad_cjk("近1年", 8)
+    h10 = pad_cjk("近3年", 8)
+    lines.append(f"{h1} {h2} {h3} {h4} {h5} {h6} {h7} {h8} {h9} {h10}")
+    lines.append("-" * 97)
     for f in data:
-        fee = f"{f.management_fee}/{f.custodian_fee}"
-        d1 = pad_cjk(f.name, 22)
+        d1 = pad_cjk(f.name, 20)
         d2 = pad_cjk(f.code, 8)
-        d3 = pad_cjk(f.daily_limit, 14)
-        d4 = pad_cjk(fee, 12)
-        d5 = pad_cjk(f.return_1y, 10)
-        d6 = pad_cjk(f.fund_size, 12)
-        lines.append(f"{d1} {d2} {d3} {d4} {d5} {d6}")
+        d3 = pad_cjk(f.daily_limit, 18)
+        d4 = pad_cjk(f.management_fee, 7)
+        d5 = pad_cjk(f.custodian_fee, 7)
+        d6 = pad_cjk(f.sales_service_fee, 7)
+        d7 = pad_cjk(f"{f.total_fee_pct:.2f}%", 7)
+        d8 = pad_cjk(f.purchase_fee, 7)
+        d9 = pad_cjk(f.return_1y, 8)
+        d10 = pad_cjk(f.return_3y, 8)
+        lines.append(f"{d1} {d2} {d3} {d4} {d5} {d6} {d7} {d8} {d9} {d10}")
     lines.append("```")
     return "\n".join(lines)
 
 def fmt_etf_table(data: List[ETFFund]) -> str:
     lines = []
     lines.append("```")
-    h1 = pad_cjk("ETF名称", 20)
+    h1 = pad_cjk("ETF名称", 18)
     h2 = pad_cjk("代码", 8)
     h3 = pad_cjk("最新价", 10)
     h4 = pad_cjk("涨跌幅", 10)
     h5 = pad_cjk("溢价率", 10)
     h6 = pad_cjk("成交额", 10)
     lines.append(f"{h1} {h2} {h3} {h4} {h5} {h6}")
-    lines.append("-" * 68)
+    lines.append("-" * 66)
     for f in data:
-        d1 = pad_cjk(f.name, 20)
+        d1 = pad_cjk(f.name, 18)
         d2 = pad_cjk(f.code, 8)
         d3 = pad_cjk(f.price, 10)
         d4 = pad_cjk(f.change_pct, 10)
@@ -64,7 +71,7 @@ def fmt_premium_warnings(data: List[ETFFund]) -> str:
             rate_str = f.premium_rate.replace("%", "")
             rate = float(rate_str)
             if rate > 5:
-                warnings.append(f"🔴 **{f.name}**({f.code}) 溢价率 {f.premium_rate}，严重偏高，风险极大！")
+                warnings.append(f"🔴 **{f.name}**({f.code}) 溢价率 {f.premium_rate}，严重偏高！")
             elif rate > 3:
                 warnings.append(f"🟡 {f.name}({f.code}) 溢价率 {f.premium_rate}，偏高需谨慎。")
         except (ValueError, AttributeError):
@@ -90,10 +97,12 @@ def build_message(otc_data: List[OTCFund], etf_data: List[ETFFund]) -> str:
 
     sections = []
 
-    sections.append(f"> {status_emoji} 市场状态：{status_text}（{now.strftime('%H:%M')}）")
+    sections.append(f"> {status_emoji} 市场状态：{status_text}（{now.strftime('%Y-%m-%d %H:%M')}）")
+    sections.append("")
+    sections.append("> 💡 你有京东Plus会员，A类申购费已免除，实际只付管理费+托管费+销售服务费")
     sections.append("")
 
-    sections.append("## 📈 场外基金限额/费率/业绩")
+    sections.append("## 📈 场外基金（A类/I类）")
     sections.append("")
     sections.append(fmt_otc_table(otc_data))
 
@@ -117,7 +126,7 @@ def build_message(otc_data: List[OTCFund], etf_data: List[ETFFund]) -> str:
 
 def send_serverchan(title: str, content: str) -> bool:
     if not SERVERCHAN_KEY:
-        print("错误: 未设置 SERVERCHAN_KEY 环境变量")
+        print("⚠️ 未设置 SERVERCHAN_KEY 环境变量，跳过推送")
         return False
 
     url = f"https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send"
@@ -125,13 +134,13 @@ def send_serverchan(title: str, content: str) -> bool:
         resp = requests.post(url, data={"title": title, "desp": content}, timeout=15)
         result = resp.json()
         if result.get("code") == 0:
-            print("Server酱推送成功!")
+            print("✅ Server酱推送成功!")
             return True
         else:
-            print(f"Server酱推送失败: {result}")
+            print(f"❌ Server酱推送失败: {result}")
             return False
     except Exception as e:
-        print(f"Server酱推送异常: {e}")
+        print(f"❌ Server酱推送异常: {e}")
         return False
 
 def notify(otc_data: List[OTCFund], etf_data: List[ETFFund]) -> bool:

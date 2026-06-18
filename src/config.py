@@ -12,7 +12,9 @@ class OTCFund:
     limit_amount: Optional[float] = None
     management_fee: str = "待查"
     custodian_fee: str = "待查"
+    sales_service_fee: str = "0.00%"
     total_fee_pct: float = 0.0
+    purchase_fee: str = "待查"
     return_1y: str = "待查"
     return_3y: str = "待查"
     fund_size: str = "待查"
@@ -28,13 +30,16 @@ class ETFFund:
     volume: str = "待查"
 
 OTC_FUNDS: List[OTCFund] = [
-    OTCFund(name="广发纳斯达克100指数A", code="270042", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="国泰纳斯达克100指数", code="160213", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="大成纳斯达克100指数A", code="000834", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="华安纳斯达克100指数A", code="040046", management_fee="1.00%", custodian_fee="0.20%", total_fee_pct=1.20),
-    OTCFund(name="易方达纳斯达克100A", code="161130", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="天弘纳斯达克100A", code="018043", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="南方纳斯达克100I", code="021000", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="广发纳斯达克100指数A", code="270042"),
+    OTCFund(name="国泰纳斯达克100指数", code="160213"),
+    OTCFund(name="大成纳斯达克100指数A", code="000834"),
+    OTCFund(name="华安纳斯达克100指数A", code="040046"),
+    OTCFund(name="易方达纳斯达克100A", code="161130"),
+    OTCFund(name="天弘纳斯达克100A", code="018043"),
+    OTCFund(name="南方纳斯达克100I", code="021000"),
+    OTCFund(name="招商纳斯达克100A", code="019547"),
+    OTCFund(name="景顺长城纳斯达克100A", code="019118"),
+    OTCFund(name="万家纳斯达克100A", code="019005"),
 ]
 
 ETF_FUNDS: List[ETFFund] = [
