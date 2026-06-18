@@ -73,7 +73,8 @@ def rank_key(fund: OTCFund):
         te = 999
 
     if ret3y is not None and ret3y > 0:
-        base_return = ret3y
+        annualized = ((1 + ret3y / 100) ** (1 / 3) - 1) * 100
+        base_return = annualized
     elif ret1y is not None and ret1y > 0:
         base_return = ret1y
     else:
