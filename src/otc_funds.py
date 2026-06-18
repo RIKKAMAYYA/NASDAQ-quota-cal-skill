@@ -18,6 +18,8 @@ def fetch_fund_info(code: str) -> dict:
         "sales_service_fee": "0.00%",
         "purchase_fee_original": "待查",
         "purchase_fee_current": "待查",
+        "tracking_error": "待查",
+        "tracking_error_avg": "待查",
         "return_1y": "待查",
         "return_3y": "待查",
         "fund_size": "待查",
@@ -81,6 +83,25 @@ def fetch_fund_info(code: str) -> dict:
                         pass
     except Exception as e:
         print(f"    [ERROR] fundf10 {code}: {e}")
+
+    url_ts = f'https://fundf10.eastmoney.com/tsdata_{code}.html'
+    try:
+        resp_ts = requests.get(url_ts, headers=HEADERS, timeout=10)
+        resp_ts.encoding = 'utf-8'
+        text_ts = resp_ts.text
+        clean_ts = re.sub(r'<[^>]+>', ' | ', text_ts)
+        clean_ts = re.sub(r'\s+', ' ', clean_ts)
+
+        te_match = re.search(r'纳斯达克100指数\s*\|\s*\|?\s*([\d.]+)%\s*\|\s*\|?\s*([\d.]+)%', clean_ts)
+        if te_match:
+            info["tracking_error"] = f"{te_match.group(1)}%"
+            info["tracking_error_avg"] = f"{te_match.group(2)}%"
+        else:
+            te_single = re.search(r'年化跟踪误差[^%]*?([\d.]+)%', clean_ts)
+            if te_single:
+                info["tracking_error"] = f"{te_single.group(1)}%"
+    except Exception as e:
+        print(f"    [ERROR] tsdata {code}: {e}")
 
     url2 = f'https://fund.eastmoney.com/pingzhongdata/{code}.js'
     try:
@@ -150,10 +171,12 @@ def collect_otc_data() -> List[OTCFund]:
         fund.return_1y = info["return_1y"]
         fund.return_3y = info["return_3y"]
         fund.fund_size = info["fund_size"]
+        fund.tracking_error = info["tracking_error"]
+        fund.tracking_error_avg = info["tracking_error_avg"]
 
         print(f"    → 状态: {info['status']} | 限额: {fund.daily_limit}")
         print(f"    → 管理费: {fund.management_fee} | 托管费: {fund.custodian_fee} | 销售服务费: {fund.sales_service_fee} | 总费率: {fund.total_fee_pct:.2f}%")
-        print(f"    → 申购费: {info['purchase_fee_original']}→{info['purchase_fee_current']} | 近1年: {fund.return_1y} | 近3年: {fund.return_3y}")
+        print(f"    → 跟踪误差: {fund.tracking_error}(同类{fund.tracking_error_avg}) | 申购费: {info['purchase_fee_original']}→{info['purchase_fee_current']} | 近1年: {fund.return_1y} | 近3年: {fund.return_3y}")
 
         time.sleep(0.3)
         results.append(fund)

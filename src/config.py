@@ -15,6 +15,8 @@ class OTCFund:
     sales_service_fee: str = "0.00%"
     total_fee_pct: float = 0.0
     purchase_fee: str = "待查"
+    tracking_error: str = "待查"
+    tracking_error_avg: str = "待查"
     return_1y: str = "待查"
     return_3y: str = "待查"
     fund_size: str = "待查"
@@ -38,7 +40,6 @@ OTC_FUNDS: List[OTCFund] = [
     OTCFund(name="天弘纳斯达克100A", code="018043"),
     OTCFund(name="南方纳斯达克100I", code="021000"),
     OTCFund(name="招商纳斯达克100A", code="019547"),
-    OTCFund(name="景顺长城纳斯达克100A", code="019118"),
     OTCFund(name="万家纳斯达克100A", code="019005"),
 ]
 
