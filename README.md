@@ -18,7 +18,12 @@ npx skills add https://github.com/RIKKAMAYYA/NASDAQ-quota-cal-skill.git -y -g --
 
 ## 快速开始
 
+通过 `npx skills add` 安装后，skill 目录里已自带可运行脚本：
+
 ```bash
+# 找到 npx 装出来的 skill 目录（一般是 ~/.claude/skills/nasdaq-quota-cal/）
+cd ~/.claude/skills/nasdaq-quota-cal
+
 # 安装依赖
 pip install -r requirements.txt
 
@@ -31,6 +36,14 @@ python src/main.py
 # 自定义每日额度
 python src/main.py -b 500          # 命令行参数
 DAILY_BUDGET=1000 python src/main.py  # 环境变量
+```
+
+如果你是从 GitHub 克隆仓库直接运行，则路径对应 `仓库根/.trae/skills/nasdaq-quota-cal/`：
+
+```bash
+cd /path/to/NASDAQ-quota-cal-skill/.trae/skills/nasdaq-quota-cal
+pip install -r requirements.txt
+python src/main.py
 ```
 
 ## 配置参数
@@ -76,26 +89,32 @@ DAILY_BUDGET=1000 python src/main.py  # 环境变量
 ## 项目结构
 
 ```
-NASQ-skill/
-├── .trae/skills/nasq-skill/SKILL.md  # Trae Skill 定义
-├── src/
-│   ├── config.py        # 基金列表 + 配置参数
-│   ├── otc_funds.py     # 场外基金数据采集（并发）
-│   ├── etf_funds.py     # 场内ETF数据采集（并发）
-│   ├── recommender.py   # 购买方案推荐
-│   ├── notifier.py      # 消息格式化 + Server酱推送
-│   └── main.py          # 主入口
-├── requirements.txt
-└── .gitignore
+NASDAQ-quota-cal-skill/
+├── README.md
+├── .gitignore
+├── debug_*.py                # 调试脚本（开发用，不随 skill 一起发布）
+└── .trae/skills/nasdaq-quota-cal/    # Skill 完整包（npx skills add 装的就是这里）
+    ├── SKILL.md              # Trae Skill 定义
+    ├── requirements.txt
+    └── src/
+        ├── config.py         # 基金列表 + 配置参数
+        ├── otc_funds.py      # 场外基金数据采集（并发）
+        ├── etf_funds.py      # 场内ETF数据采集（并发）
+        ├── recommender.py    # 购买方案推荐
+        ├── notifier.py       # 消息格式化 + Server酱推送
+        └── main.py           # 主入口
 ```
+
+> npx 装出来的目录里只包含 `.trae/skills/nasdaq-quota-cal/` 子树，
+> 不包含仓库根的 `debug_*.py` 和 `README.md`。
 
 ## 定时运行
 
 ### macOS/Linux crontab
 
 ```bash
-# 每天早上9点运行
-0 9 * * * cd /path/to/NASQ-skill && DAILY_BUDGET=300 python3 src/main.py
+# 每天早上9点运行（路径换成实际 skill 安装位置）
+0 9 * * * cd /path/to/nasdaq-quota-cal && DAILY_BUDGET=300 python3 src/main.py
 ```
 
 ### GitHub Actions
@@ -116,8 +135,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
+      - run: pip install -r .trae/skills/nasdaq-quota-cal/requirements.txt
       - run: python src/main.py
+        working-directory: .trae/skills/nasdaq-quota-cal
         env:
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
           DAILY_BUDGET: ${{ secrets.DAILY_BUDGET }}
