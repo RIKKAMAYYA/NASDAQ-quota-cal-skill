@@ -58,6 +58,8 @@ def fmt_etf_table(data: List[ETFFund]) -> str:
 def fmt_premium_warnings(data: List[ETFFund]) -> str:
     warnings = []
     for f in data:
+        if f.premium_rate in ("休市", "待查"):
+            continue
         try:
             rate_str = f.premium_rate.replace("%", "")
             rate = float(rate_str)
@@ -73,7 +75,23 @@ def fmt_premium_warnings(data: List[ETFFund]) -> str:
 
 def build_message(otc_data: List[OTCFund], etf_data: List[ETFFund]) -> str:
     title = "📊 纳斯达克100基金日报"
+
+    from datetime import datetime
+    now = datetime.now()
+    wd = now.weekday()
+    hour = now.hour
+    minute = now.minute
+    time_num = hour * 100 + minute
+    is_weekend = wd >= 5
+    is_trading = (not is_weekend) and ((930 <= time_num <= 1130) or (1300 <= time_num <= 1500))
+
+    status_emoji = "🟢" if is_trading else ("🔴" if is_weekend else "🟡")
+    status_text = "交易中" if is_trading else ("周末休市" if is_weekend else "非交易时段")
+
     sections = []
+
+    sections.append(f"> {status_emoji} 市场状态：{status_text}（{now.strftime('%H:%M')}）")
+    sections.append("")
 
     sections.append("## 📈 场外基金限额/费率/业绩")
     sections.append("")
