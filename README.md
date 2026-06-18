@@ -2,7 +2,7 @@
 
 安装
 ``` sh
-npx skills add https://github.com/RIKKAMAYYA/NASDAQ-quota-cal-skill.git -y -g --skill NASDAQ-quota-cal 
+npx skills add https://github.com/RIKKAMAYYA/NASDAQ-quota-cal-skill.git -y -g --skill nasdaq-quota-cal 
 ```
 
 每日统计国内跟踪纳斯达克100指数的场外基金限额/费率/跟踪误差，以及场内ETF溢价率，并生成每日购买方案，通过 Server酱 推送到微信。

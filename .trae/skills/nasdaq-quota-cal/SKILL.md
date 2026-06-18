@@ -1,5 +1,5 @@
 ---
-name: "NASDAQ-quota-cal"
+name: "nasdaq-quota-cal"
 description: "每日统计国内跟踪纳斯达克100指数的场外基金限额/费率/日期，以及场内ETF名称/代码/溢价率等信息，并通过Server酱在每天9:00推送。当用户询问纳指100基金数据、限额、溢价率时调用此技能。"
 ---
 
