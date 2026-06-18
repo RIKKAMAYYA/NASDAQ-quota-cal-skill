@@ -1,4 +1,5 @@
 import requests, re, json, time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 from src.config import OTCFund, OTC_FUNDS
 
@@ -142,42 +143,50 @@ def fetch_fund_info(code: str) -> dict:
 
     return info
 
+def process_single_fund(fund: OTCFund) -> OTCFund:
+    info = fetch_fund_info(fund.code)
+
+    fund.management_fee = info["management_fee"]
+    fund.custodian_fee = info["custodian_fee"]
+    fund.sales_service_fee = info["sales_service_fee"]
+    fund.purchase_fee = info["purchase_fee_current"]
+
+    mgmt_val = float(info["management_fee"].replace('%', '')) if info["management_fee"] != "待查" else 0
+    cust_val = float(info["custodian_fee"].replace('%', '')) if info["custodian_fee"] != "待查" else 0
+    ssf_val = float(info["sales_service_fee"].replace('%', '')) if info["sales_service_fee"] not in ("待查", "0.00%", "---") else 0
+    fund.total_fee_pct = mgmt_val + cust_val + ssf_val
+
+    if info["status"] == "暂停申购":
+        fund.daily_limit = f"暂停申购({info['limit_text']})" if info['limit_text'] != '待查' else "暂停申购"
+        fund.limit_amount = info.get("limit_amount", 0.0)
+    elif info["status"] == "限大额":
+        fund.daily_limit = f"限大额({info['limit_text']})" if info['limit_text'] != '待查' else "限大额"
+        fund.limit_amount = info.get("limit_amount")
+    else:
+        fund.daily_limit = info['limit_text'] if info['limit_text'] != '待查' else "无限额"
+        fund.limit_amount = info.get("limit_amount", float("inf"))
+
+    fund.return_1y = info["return_1y"]
+    fund.return_3y = info["return_3y"]
+    fund.fund_size = info["fund_size"]
+    fund.tracking_error = info["tracking_error"]
+    fund.tracking_error_avg = info["tracking_error_avg"]
+
+    print(f"  ✅ {fund.name} ({fund.code}) | {info['status']} | 费率{fund.total_fee_pct:.2f}% | 跟踪误差{fund.tracking_error} | 近1年{fund.return_1y}")
+
+    return fund
+
 def collect_otc_data() -> List[OTCFund]:
     results = []
-    for fund in OTC_FUNDS:
-        print(f"  正在查询: {fund.name} ({fund.code})")
-        info = fetch_fund_info(fund.code)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_fund = {executor.submit(process_single_fund, fund): fund for fund in OTC_FUNDS}
+        for future in as_completed(future_to_fund):
+            try:
+                results.append(future.result())
+            except Exception as e:
+                fund = future_to_fund[future]
+                print(f"  ❌ {fund.name} ({fund.code}) 查询失败: {e}")
+                results.append(fund)
 
-        fund.management_fee = info["management_fee"]
-        fund.custodian_fee = info["custodian_fee"]
-        fund.sales_service_fee = info["sales_service_fee"]
-        fund.purchase_fee = info["purchase_fee_current"]
-
-        mgmt_val = float(info["management_fee"].replace('%', '')) if info["management_fee"] != "待查" else 0
-        cust_val = float(info["custodian_fee"].replace('%', '')) if info["custodian_fee"] != "待查" else 0
-        ssf_val = float(info["sales_service_fee"].replace('%', '')) if info["sales_service_fee"] not in ("待查", "0.00%", "---") else 0
-        fund.total_fee_pct = mgmt_val + cust_val + ssf_val
-
-        if info["status"] == "暂停申购":
-            fund.daily_limit = f"暂停申购({info['limit_text']})" if info['limit_text'] != '待查' else "暂停申购"
-            fund.limit_amount = info.get("limit_amount", 0.0)
-        elif info["status"] == "限大额":
-            fund.daily_limit = f"限大额({info['limit_text']})" if info['limit_text'] != '待查' else "限大额"
-            fund.limit_amount = info.get("limit_amount")
-        else:
-            fund.daily_limit = info['limit_text'] if info['limit_text'] != '待查' else "无限额"
-            fund.limit_amount = info.get("limit_amount", float("inf"))
-
-        fund.return_1y = info["return_1y"]
-        fund.return_3y = info["return_3y"]
-        fund.fund_size = info["fund_size"]
-        fund.tracking_error = info["tracking_error"]
-        fund.tracking_error_avg = info["tracking_error_avg"]
-
-        print(f"    → 状态: {info['status']} | 限额: {fund.daily_limit}")
-        print(f"    → 管理费: {fund.management_fee} | 托管费: {fund.custodian_fee} | 销售服务费: {fund.sales_service_fee} | 总费率: {fund.total_fee_pct:.2f}%")
-        print(f"    → 跟踪误差: {fund.tracking_error}(同类{fund.tracking_error_avg}) | 申购费: {info['purchase_fee_original']}→{info['purchase_fee_current']} | 近1年: {fund.return_1y} | 近3年: {fund.return_3y}")
-
-        time.sleep(0.3)
-        results.append(fund)
+    results.sort(key=lambda x: x.code)
     return results

@@ -111,16 +111,28 @@ def parse_etf_detail(detail: Dict[str, Any], code: str) -> ETFFund:
     )
 
 def fetch_etf_data() -> List[ETFFund]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     results = []
-    for fund in ETF_FUNDS:
-        print(f"  正在查询: {fund.name} ({fund.code})")
+
+    def process_etf(fund: ETFFund) -> ETFFund:
         detail = fetch_etf_detail(fund.code)
         if detail:
             etf = parse_etf_detail(detail, fund.code)
-            print(f"    → 价格: {etf.price}, 涨跌: {etf.change_pct}, 溢价率: {etf.premium_rate}, 成交额: {etf.volume}")
-            results.append(etf)
+            print(f"  ✅ {etf.name} ({etf.code}) | 价格:{etf.price} | 涨跌:{etf.change_pct} | 溢价率:{etf.premium_rate} | 成交额:{etf.volume}")
+            return etf
         else:
-            print(f"    → 获取失败，使用默认数据")
-            results.append(fund)
-        time.sleep(0.2)
+            print(f"  ❌ {fund.name} ({fund.code}) 获取失败")
+            return fund
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_fund = {executor.submit(process_etf, fund): fund for fund in ETF_FUNDS}
+        for future in as_completed(future_to_fund):
+            try:
+                results.append(future.result())
+            except Exception as e:
+                fund = future_to_fund[future]
+                print(f"  ❌ {fund.name} ({fund.code}) 异常: {e}")
+                results.append(fund)
+
+    results.sort(key=lambda x: x.code)
     return results
