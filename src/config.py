@@ -34,7 +34,7 @@ OTC_FUNDS: List[OTCFund] = [
     OTCFund(name="华安纳斯达克100指数A", code="040046", management_fee="1.00%", custodian_fee="0.20%", total_fee_pct=1.20),
     OTCFund(name="易方达纳斯达克100A", code="161130", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
     OTCFund(name="天弘纳斯达克100A", code="018043", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
-    OTCFund(name="南方纳斯达克100I", code="015062", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
+    OTCFund(name="南方纳斯达克100I", code="021000", management_fee="0.80%", custodian_fee="0.20%", total_fee_pct=1.00),
 ]
 
 ETF_FUNDS: List[ETFFund] = [

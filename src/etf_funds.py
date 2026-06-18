@@ -30,7 +30,7 @@ def fetch_etf_detail(code: str) -> Optional[Dict[str, Any]]:
     url = (
         f"http://push2.eastmoney.com/api/qt/stock/get"
         f"?secid={secid}"
-        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f169,f170,f171"
+        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f169"
     )
     try:
         resp = requests.get(url, headers=HEADERS, timeout=8)
@@ -40,36 +40,31 @@ def fetch_etf_detail(code: str) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
 
-def fetch_etf_iopv(code: str) -> Optional[float]:
-    secid = get_secid(code)
-    url = (
-        f"http://push2.eastmoney.com/api/qt/stock/get"
-        f"?secid={secid}"
-        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f169,f170,f171,f84,f85,f86,f87"
-    )
+def fetch_etf_nav(code: str) -> Tuple[Optional[float], Optional[float], str]:
+    url = f"http://fundgz.1234567.com.cn/js/{code}.js"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=8)
-        data = resp.json().get("data", {})
-        for field in ["f86", "f87", "f85", "f84"]:
-            val = data.get(field)
-            if val and val != 0 and val != "-":
-                try:
-                    v = float(val)
-                    if v > 100:
-                        v = v / 1000
-                    if 0.5 < v < 200:
-                        return v
-                except (ValueError, TypeError):
-                    pass
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        match = re.search(r'jsonpgz\((.+?)\);', resp.text)
+        if match:
+            info = json.loads(match.group(1))
+            dwjz = float(info.get('dwjz', 0))
+            gsz = float(info.get('gsz', 0))
+            gszzl = info.get('gszzl', '?')
+            gztime = info.get('gztime', '')
+            return dwjz, gsz, gszzl, gztime
     except Exception:
         pass
+    return None, None, '?', ''
+
+def calc_premium(price: float, nav: float) -> Optional[float]:
+    if price > 0 and nav > 0:
+        return (price - nav) / nav * 100
     return None
 
 def parse_etf_detail(detail: Dict[str, Any], code: str) -> ETFFund:
     raw_price = detail.get("f43", 0)
     raw_volume_amount = detail.get("f48", 0.0)
     raw_change_pct = detail.get("f169", 0)
-    raw_f171 = detail.get("f171", 0)
     name = detail.get("f58", "未知")
 
     price = raw_price / 1000 if raw_price else 0
@@ -89,14 +84,16 @@ def parse_etf_detail(detail: Dict[str, Any], code: str) -> ETFFund:
         volume_str = "0"
 
     premium_str = "待查"
-    if raw_f171 != 0 and -2000 < raw_f171 < 2000:
-        premium_val = raw_f171 / 100
-        premium_str = f"{premium_val:.2f}%"
-    elif price > 0:
-        iopv = fetch_etf_iopv(code)
-        if iopv and iopv > 0:
-            premium_val = (price - iopv) / iopv * 100
-            premium_str = f"{premium_val:.2f}%"
+    if price > 0:
+        dwjz, gsz, gszzl, gztime = fetch_etf_nav(code)
+        if gsz and gsz > 0:
+            premium = calc_premium(price, gsz)
+            if premium is not None:
+                premium_str = f"{premium:.2f}%"
+        elif dwjz and dwjz > 0:
+            premium = calc_premium(price, dwjz)
+            if premium is not None:
+                premium_str = f"{premium:.2f}%"
 
     if price == 0:
         price_str = "待查"
