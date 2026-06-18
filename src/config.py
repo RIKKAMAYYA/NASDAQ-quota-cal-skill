@@ -4,6 +4,8 @@ from typing import List, Optional
 
 SERVERCHAN_KEY = os.getenv("SERVERCHAN_KEY", "")
 
+DAILY_BUDGET = float(os.getenv("DAILY_BUDGET", "210"))
+
 @dataclass
 class OTCFund:
     name: str

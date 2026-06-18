@@ -1,5 +1,5 @@
 from typing import List, Dict
-from src.config import OTCFund, ETFFund
+from src.config import OTCFund, ETFFund, DAILY_BUDGET
 
 RECOMMENDATION_NOTES = {
     "270042": "广发纳指A，老牌QDII，规模大",
@@ -24,8 +24,6 @@ RECOMMENDATION_NOTES = {
     "018966": "汇添富纳指A，总费率0.65%",
     "016452": "南方纳指A，总费率0.65%",
 }
-
-DAILY_BUDGET = 210.0
 
 def compute_score(fund: OTCFund) -> float:
     fee_score = max(0, 100 - (fund.total_fee_pct - 0.60) * 200)
