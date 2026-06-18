@@ -22,17 +22,15 @@ def is_market_open() -> bool:
     wd = now.weekday()
     if wd >= 5:
         return False
-    hour = now.hour
-    minute = now.minute
-    time_num = hour * 100 + minute
+    time_num = now.hour * 100 + now.minute
     return (930 <= time_num <= 1130) or (1300 <= time_num <= 1500)
 
-def fetch_single_etf(code: str) -> Optional[Dict[str, Any]]:
+def fetch_etf_detail(code: str) -> Optional[Dict[str, Any]]:
     secid = get_secid(code)
     url = (
         f"http://push2.eastmoney.com/api/qt/stock/get"
         f"?secid={secid}"
-        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f170,f171"
+        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f169,f170,f171"
     )
     try:
         resp = requests.get(url, headers=HEADERS, timeout=8)
@@ -42,160 +40,90 @@ def fetch_single_etf(code: str) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
 
-def sanity_check_price(val: float) -> bool:
-    return 0.5 <= val <= 200
-
-def sanity_check_change(val: float) -> bool:
-    return -20 <= val <= 20
-
-def format_price(val) -> Tuple[str, Optional[float]]:
-    if val is None or val == "-":
-        return "待查", None
+def fetch_etf_iopv(code: str) -> Optional[float]:
+    secid = get_secid(code)
+    url = (
+        f"http://push2.eastmoney.com/api/qt/stock/get"
+        f"?secid={secid}"
+        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f169,f170,f171,f84,f85,f86,f87"
+    )
     try:
-        v = float(val)
-        if v == 0:
-            return "休市", 0.0
-        if v > 100:
-            v = v / 1000
-        if not sanity_check_price(v):
-            return "数据异常", None
-        if v >= 10:
-            return f"{v:.3f}", v
-        return f"{v:.4f}", v
-    except (ValueError, TypeError):
-        return "待查", None
-
-def format_change(val) -> Tuple[str, Optional[float]]:
-    if val is None or val == "-":
-        return "待查", None
-    try:
-        v = float(val)
-        if not sanity_check_change(v):
-            return "数据异常", None
-        return f"{v:.2f}%", v
-    except (ValueError, TypeError):
-        return "待查", None
-
-def format_volume(val) -> Tuple[str, Optional[float]]:
-    if val is None or val == "-":
-        return "待查", None
-    try:
-        v = float(val)
-        if v == 0:
-            return "0", 0.0
-        if v >= 1_0000_0000:
-            return f"{v / 1_0000_0000:.2f}亿", v
-        if v >= 1_0000:
-            return f"{v / 1_0000:.2f}万", v
-        return f"{v:.0f}", v
-    except (ValueError, TypeError):
-        return "待查", None
-
-def format_premium(premium_val, price_val, iopv_val=None) -> Tuple[str, Optional[float]]:
-    if premium_val is not None:
-        try:
-            p = float(premium_val)
-            if p == 0:
-                return "0.00%", 0.0
-            if -20 <= p <= 20:
-                return f"{p:.2f}%", p
-        except (ValueError, TypeError):
-            pass
-
-    if price_val and iopv_val and iopv_val > 0:
-        pct = (price_val - iopv_val) / iopv_val * 100
-        return f"{pct:.2f}%", pct
-    return "待查", None
-
-def cross_validate_price(price_val: Optional[float], code: str) -> Optional[float]:
-    if price_val is not None and price_val > 0:
-        return price_val
-    detail = fetch_single_etf(code)
-    if detail:
-        raw_f43 = detail.get("f43")
-        if raw_f43:
-            try:
-                cv = float(raw_f43)
-                if cv > 100:
-                    cv = cv / 1000
-                if sanity_check_price(cv):
-                    return cv
-            except (ValueError, TypeError):
-                pass
+        resp = requests.get(url, headers=HEADERS, timeout=8)
+        data = resp.json().get("data", {})
+        for field in ["f86", "f87", "f85", "f84"]:
+            val = data.get(field)
+            if val and val != 0 and val != "-":
+                try:
+                    v = float(val)
+                    if v > 100:
+                        v = v / 1000
+                    if 0.5 < v < 200:
+                        return v
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
     return None
 
-def fetch_etf_data(retries: int = 2) -> List[ETFFund]:
-    market_open = is_market_open()
-    secids = ",".join(get_secid(f.code) for f in ETF_FUNDS)
-    url = (
-        f"http://push2.eastmoney.com/api/qt/ulist.np/get"
-        f"?fields=f2,f3,f12,f14,f23,f37,f170,f171"
-        f"&secids={secids}"
-        f"&ut=fa5fd1943c7b386f172d6893dbfd32bb"
+def parse_etf_detail(detail: Dict[str, Any], code: str) -> ETFFund:
+    raw_price = detail.get("f43", 0)
+    raw_volume_amount = detail.get("f48", 0.0)
+    raw_change_pct = detail.get("f169", 0)
+    raw_f171 = detail.get("f171", 0)
+    name = detail.get("f58", "未知")
+
+    price = raw_price / 1000 if raw_price else 0
+    price_str = f"{price:.3f}" if price >= 10 else f"{price:.4f}" if price > 0 else "待查"
+
+    change_pct = raw_change_pct / 10 if raw_change_pct else 0
+    change_str = f"{change_pct:.2f}%" if raw_change_pct != 0 else "0.00%"
+
+    volume_amount = raw_volume_amount
+    if volume_amount >= 1_0000_0000:
+        volume_str = f"{volume_amount / 1_0000_0000:.2f}亿"
+    elif volume_amount >= 1_0000:
+        volume_str = f"{volume_amount / 1_0000:.2f}万"
+    elif volume_amount > 0:
+        volume_str = f"{volume_amount:.0f}"
+    else:
+        volume_str = "0"
+
+    premium_str = "待查"
+    if raw_f171 != 0 and -2000 < raw_f171 < 2000:
+        premium_val = raw_f171 / 100
+        premium_str = f"{premium_val:.2f}%"
+    elif price > 0:
+        iopv = fetch_etf_iopv(code)
+        if iopv and iopv > 0:
+            premium_val = (price - iopv) / iopv * 100
+            premium_str = f"{premium_val:.2f}%"
+
+    if price == 0:
+        price_str = "待查"
+        change_str = "待查"
+        premium_str = "待查"
+        volume_str = "0"
+
+    return ETFFund(
+        name=name,
+        code=code,
+        premium_rate=premium_str,
+        price=price_str,
+        change_pct=change_str,
+        volume=volume_str,
     )
-    for attempt in range(retries):
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            data = resp.json()
-            results = []
-            if data.get("data") and data["data"].get("diff"):
-                for item in data["data"]["diff"]:
-                    code = str(item.get("f12", ""))
-                    name = item.get("f14", "")
-                    raw_price = item.get("f2")
-                    raw_change = item.get("f3")
-                    raw_premium = item.get("f23")
-                    raw_volume = item.get("f37")
-                    raw_iopv = item.get("f170")
 
-                    price_str, price_num = format_price(raw_price)
-                    change_str, change_num = format_change(raw_change)
-                    volume_str, volume_num = format_volume(raw_volume)
-
-                    iopv_num = None
-                    if raw_iopv:
-                        try:
-                            iopv_num = float(raw_iopv)
-                            if iopv_num > 100:
-                                iopv_num = iopv_num / 1000
-                        except (ValueError, TypeError):
-                            pass
-                    premium_str, premium_num = format_premium(raw_premium, price_num, iopv_num)
-
-                    if not market_open and (price_num == 0.0 or price_str == "休市"):
-                        price_str = "休市中"
-                        change_str = "休市中"
-                        premium_str = "休市中"
-                        volume_str = "休市中"
-                    elif market_open and price_num == 0.0:
-                        price_str = "待查"
-                        change_str = "待查"
-                        premium_str = "待查"
-                        volume_str = "待查"
-                    elif price_str == "数据异常" or change_str == "数据异常":
-                        fallback_price = cross_validate_price(price_num, code)
-                        if fallback_price:
-                            price_str = f"{fallback_price:.4f}"
-                            price_num = fallback_price
-                            change_str = "待查"
-
-                    fund = ETFFund(
-                        name=name or "未知",
-                        code=code,
-                        premium_rate=premium_str,
-                        price=price_str,
-                        change_pct=change_str,
-                        volume=volume_str,
-                    )
-                    results.append(fund)
-            if results:
-                return results
-            if attempt < retries - 1:
-                time.sleep(1)
-        except Exception as e:
-            if attempt < retries - 1:
-                print(f"  第{attempt+1}次获取ETF数据失败，重试中... ({e})")
-                time.sleep(1)
-            else:
-                print(f"  获取ETF数据失败: {e}")
-    return ETF_FUNDS
+def fetch_etf_data() -> List[ETFFund]:
+    results = []
+    for fund in ETF_FUNDS:
+        print(f"  正在查询: {fund.name} ({fund.code})")
+        detail = fetch_etf_detail(fund.code)
+        if detail:
+            etf = parse_etf_detail(detail, fund.code)
+            print(f"    → 价格: {etf.price}, 涨跌: {etf.change_pct}, 溢价率: {etf.premium_rate}, 成交额: {etf.volume}")
+            results.append(etf)
+        else:
+            print(f"    → 获取失败，使用默认数据")
+            results.append(fund)
+        time.sleep(0.2)
+    return results
