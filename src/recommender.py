@@ -8,10 +8,24 @@ RECOMMENDATION_NOTES = {
     "040046": "华安纳指A，管理费0.60%较低",
     "161130": "易方达纳指A，总费率0.60%最低",
     "018043": "天弘纳指A，总费率0.60%最低",
-    "021000": "南方纳指I，I类份额，限大额1000元",
+    "021000": "南方纳指I，I类份额",
     "019547": "招商纳指A，总费率0.65%较低",
-    "019005": "万家纳指A，总费率1.60%最高，不推荐",
+    "019441": "万家纳指A",
+    "015299": "华夏纳指A",
+    "016532": "嘉实纳指A，总费率0.60%最低",
+    "021838": "嘉实纳指I",
+    "016055": "博时纳指A，总费率0.65%",
+    "024237": "博时纳指I",
+    "019524": "华泰柏瑞纳指A，总费率0.65%",
+    "022664": "华泰柏瑞纳指I",
+    "539001": "建信纳指A，费率1.00%",
+    "019172": "摩根纳指A，总费率0.60%最低",
+    "019736": "宝盈纳指A，总费率0.65%",
+    "018966": "汇添富纳指A，总费率0.65%",
+    "016452": "南方纳指A，总费率0.65%",
 }
+
+DAILY_BUDGET = 210.0
 
 def compute_score(fund: OTCFund) -> float:
     fee_score = max(0, 100 - (fund.total_fee_pct - 0.60) * 200)
@@ -44,6 +58,18 @@ def is_purchasable(fund: OTCFund) -> bool:
         return False
     return True
 
+def rank_key(fund: OTCFund):
+    fee = fund.total_fee_pct
+    try:
+        te = float(fund.tracking_error.replace('%', ''))
+    except (ValueError, AttributeError):
+        te = 999
+    try:
+        ret3y = float(fund.return_3y.replace('%', ''))
+    except (ValueError, AttributeError):
+        ret3y = 0
+    return (fee, te, -ret3y)
+
 def get_buy_plan(otc_data: List[OTCFund]) -> str:
     scored = [(compute_score(f), f) for f in otc_data]
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -51,54 +77,57 @@ def get_buy_plan(otc_data: List[OTCFund]) -> str:
     lines = []
     lines.append("### 📋 综合评分排名（费率40%+限额30%+跟踪误差30%）")
     lines.append("")
-    lines.append("| 排名 | 基金名称 | 代码 | 总费率 | 跟踪误差 | 每日限额 | 可买 | 评分 |")
-    lines.append("|:---:|---------|:----:|:-----:|:-------:|:--------:|:---:|:---:|")
+    lines.append("| 排名 | 基金名称 | 代码 | 总费率 | 跟踪误差 | 近1年 | 近3年 | 每日限额 | 可买 | 评分 |")
+    lines.append("|:---:|---------|:----:|:-----:|:-------:|:----:|:----:|:--------:|:---:|:---:|")
     for rank, (score, fund) in enumerate(scored, 1):
         limit_display = fund.daily_limit
         buyable = "✅" if is_purchasable(fund) else "❌"
-        lines.append(f"| {rank} | {fund.name} | {fund.code} | {fund.total_fee_pct:.2f}% | {fund.tracking_error} | {limit_display} | {buyable} | {score:.1f} |")
+        lines.append(f"| {rank} | {fund.name} | {fund.code} | {fund.total_fee_pct:.2f}% | {fund.tracking_error} | {fund.return_1y} | {fund.return_3y} | {limit_display} | {buyable} | {score:.1f} |")
 
     lines.append("")
-    lines.append("### 💡 每日购买建议")
+    lines.append("### 💡 每日购买方案（总额度210元）")
     lines.append("")
-    lines.append("> 📌 你有京东Plus会员，A类申购费已免除，实际只付管理费+托管费+销售服务费")
+    lines.append("> 📌 优先级：低总费率 → 低跟踪误差 → 高近3年收益 → 买满额度")
+    lines.append("> 📌 你有京东Plus会员，A类申购费已免除")
     lines.append("")
 
-    available = [(s, f) for s, f in scored if is_purchasable(f)]
+    available = [f for f in otc_data if is_purchasable(f)]
     if not available:
         lines.append("⚠️ 当前所有基金均暂停申购或限额为0，请关注后续开放情况。")
         return "\n".join(lines)
 
-    total_score = sum(s for s, _ in available)
-    total_daily_capacity = 0
-    for s, f in available:
-        if f.limit_amount and f.limit_amount != float("inf"):
-            total_daily_capacity += f.limit_amount
+    available.sort(key=rank_key)
 
-    lines.append("**可申购基金推荐方案：**")
+    budget = DAILY_BUDGET
+    plan = []
+    for fund in available:
+        if budget <= 0:
+            break
+        limit = fund.limit_amount if fund.limit_amount and fund.limit_amount != float("inf") else budget
+        buy_amount = min(limit, budget)
+        if buy_amount > 0:
+            plan.append((fund, buy_amount))
+            budget -= buy_amount
+
+    lines.append("| 优先级 | 基金名称 | 代码 | 总费率 | 跟踪误差 | 近3年 | 限额 | 建议买入 | 说明 |")
+    lines.append("|:-----:|---------|:----:|:-----:|:-------:|:----:|:----:|:-------:|:----|")
+    for i, (fund, amount) in enumerate(plan, 1):
+        limit_str = format_amount(fund.limit_amount) if fund.limit_amount and fund.limit_amount != float("inf") else "不限"
+        note = RECOMMENDATION_NOTES.get(fund.code, "")
+        lines.append(f"| {i} | {fund.name} | {fund.code} | {fund.total_fee_pct:.2f}% | {fund.tracking_error} | {fund.return_3y} | {limit_str} | {format_amount(amount)} | {note} |")
+
+    total_bought = DAILY_BUDGET - budget
     lines.append("")
-    if total_daily_capacity > 0:
-        lines.append(f"每日合计可买入上限：约 **{format_amount(total_daily_capacity)}**")
-        lines.append("")
-
-    lines.append("| 基金名称 | 建议比例 | 每日建议金额 | 说明 |")
-    lines.append("|:--------|:-------:|:----------:|:----|")
-    for s, f in available:
-        pct = s / total_score * 100
-        note = RECOMMENDATION_NOTES.get(f.code, "")
-        if f.limit_amount and f.limit_amount != float("inf") and f.limit_amount > 0:
-            suggested = f.limit_amount * 0.8
-            amount_str = f"≤ {format_amount(suggested)}"
-        else:
-            amount_str = "视资金量而定"
-        lines.append(f"| {f.name} | {pct:.0f}% | {amount_str} | {note} |")
+    lines.append(f"**合计买入：{format_amount(total_bought)} / {format_amount(DAILY_BUDGET)}**")
+    if budget > 0:
+        lines.append(f"⚠️ 剩余额度 {format_amount(budget)} 无法分配（所有可买基金限额已用尽）")
 
     lines.append("")
-    lines.append("**优先级说明：**")
-    lines.append("1. **费率优先**：总费率越低，长期持有成本越低")
-    lines.append("2. **跟踪误差**：误差越小，跟踪指数越紧密")
-    lines.append("3. **限额优先**：限额越高，可一次性投入更多")
-    lines.append("4. **暂停申购的基金不纳入购买方案**，仅展示排名")
+    lines.append("**方案逻辑：**")
+    lines.append("1. 按「总费率↑ → 跟踪误差↑ → 近3年收益↓」排序可申购基金")
+    lines.append("2. 从第一名开始，**买满其每日限额**")
+    lines.append("3. 剩余额度继续买下一只，直到210元分配完")
+    lines.append("4. 暂停申购的基金不参与分配")
 
     return "\n".join(lines)
 

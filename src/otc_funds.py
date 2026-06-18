@@ -116,16 +116,10 @@ def fetch_fund_info(code: str) -> dict:
         if now_rate and now_rate.group(1):
             info["purchase_fee_current"] = f"{now_rate.group(1)}%"
 
-        syl_1y = re.search(r'syl_1y\s*=\s*"?([^";\n]+)', text2)
-        syl_3y = re.search(r'syl_3y\s*=\s*"?([^";\n]+)', text2)
-        if syl_1y and syl_1y.group(1):
+        syl_1n = re.search(r'syl_1n\s*=\s*"?([^";\n]+)', text2)
+        if syl_1n and syl_1n.group(1):
             try:
-                info["return_1y"] = f"{float(syl_1y.group(1)):.2f}%"
-            except ValueError:
-                pass
-        if syl_3y and syl_3y.group(1):
-            try:
-                info["return_3y"] = f"{float(syl_3y.group(1)):.2f}%"
+                info["return_1y"] = f"{float(syl_1n.group(1)):.2f}%"
             except ValueError:
                 pass
 
@@ -140,6 +134,19 @@ def fetch_fund_info(code: str) -> dict:
                     info["fund_size"] = f"{last*10000:.0f}万"
     except Exception as e:
         print(f"    [ERROR] pingzhongdata {code}: {e}")
+
+    url3 = f'http://fund.eastmoney.com/{code}.html'
+    try:
+        resp3 = requests.get(url3, headers=HEADERS, timeout=10)
+        resp3.encoding = 'utf-8'
+        clean3 = re.sub(r'<[^>]+>', ' | ', resp3.text)
+        clean3 = re.sub(r'\s+', ' ', clean3)
+
+        ret_3y = re.search(r'近3年[：:]\s*\|\s*\|?\s*([\d.]+)%', clean3)
+        if ret_3y:
+            info["return_3y"] = f"{ret_3y.group(1)}%"
+    except Exception as e:
+        print(f"    [ERROR] fundpage {code}: {e}")
 
     return info
 
